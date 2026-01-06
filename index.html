@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login | Consultancy OS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Montserrat:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/png" href="https://muoviti.com.br/wp-content/uploads/2023/08/cropped-favicon-muoviti-32x32.png">
+</head>
+<body class="h-screen flex items-center justify-center bg-gray-100">
+
+    <div class="w-full max-w-4xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row fade-in">
+        
+        <div class="md:w-1/2 brand-gradient p-12 flex flex-col justify-between text-white relative overflow-hidden">
+            <div class="z-10">
+                <img src="https://muoviti.com.br/wp-content/uploads/2023/08/logo-muoviti-branco.png" alt="Muoviti" class="h-12 mb-6">
+                <h1 class="text-3xl font-bold font-montserrat leading-tight">Gestão Inteligente &<br>Resultados Reais.</h1>
+                <p class="mt-4 text-gray-300 text-sm">Acesse o portal para acompanhar a evolução do seu projeto, diagnósticos e recrutamento em tempo real.</p>
+            </div>
+            <div class="text-xs text-gray-400 z-10">© 2026 Consultancy OS</div>
+            
+            <div class="absolute -bottom-10 -right-10 w-64 h-64 bg-white opacity-5 rounded-full"></div>
+        </div>
+
+        <div class="md:w-1/2 p-12 flex flex-col justify-center">
+            <h2 class="text-2xl font-bold text-gray-800 mb-2">Bem-vindo</h2>
+            <p class="text-gray-500 mb-8 text-sm">Entre com suas credenciais de acesso.</p>
+
+            <form id="loginForm" onsubmit="handleLogin(event)">
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-xs font-bold mb-2 uppercase">E-mail Corporativo</label>
+                    <input type="text" id="email" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-[#00A3A8] transition" placeholder="nome@empresa.com" required>
+                </div>
+                <div class="mb-6">
+                    <label class="block text-gray-700 text-xs font-bold mb-2 uppercase">Senha</label>
+                    <input type="password" id="senha" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-[#00A3A8] transition" placeholder="••••••••" required>
+                </div>
+                
+                <button type="submit" id="btnLogin" class="w-full bg-[#00A3A8] hover:bg-[#008589] text-white font-bold py-3 rounded-lg transition transform hover:-translate-y-1 shadow-lg">
+                    ACESSAR PORTAL
+                </button>
+                <p id="errorMsg" class="text-red-500 text-sm mt-4 text-center hidden"></p>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // COLOQUE AQUI A URL DO SEU SCRIPT GOOGLE APPS SCRIPT
+        const API_URL = 'SUA_URL_DA_API_AQUI'; 
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btnLogin');
+            const msg = document.getElementById('errorMsg');
+            
+            btn.innerHTML = '<span class="loader inline-block w-4 h-4 border-white border-t-transparent"></span> Entrando...';
+            btn.disabled = true;
+            msg.classList.add('hidden');
+
+            const payload = {
+                action: 'login',
+                email: document.getElementById('email').value,
+                senha: document.getElementById('senha').value
+            };
+
+            try {
+                const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
+                const data = await res.json();
+
+                if (data.result === 'success') {
+                    // Salva sessão segura
+                    localStorage.setItem('muoviti_user', JSON.stringify(data.user));
+                    window.location.href = 'dashboard.html';
+                } else {
+                    throw new Error(data.message);
+                }
+            } catch (err) {
+                msg.innerText = err.message || "Erro de conexão.";
+                msg.classList.remove('hidden');
+                btn.innerHTML = 'ACESSAR PORTAL';
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
