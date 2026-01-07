@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TV Corporativa - Painel Inteligente</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;700;900&display=swap" rel="stylesheet">
+
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        body, html {
+            height: 100%;
+            margin: 0;
+            overflow: hidden; /* TV não tem scroll */
+            background-color: #000;
+            font-family: 'Inter', sans-serif;
+        }
+
+        #root { height: 100%; width: 100%; }
+
+        /* Container Principal */
+        .tv-container {
+            display: flex;
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        /* Área de Mídia (Esquerda ou Fundo) */
+        .media-area {
+            flex: 2;
+            position: relative;
+            background: #111;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .media-area img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            animation: zoomEffect 20s infinite alternate;
+        }
+
+        .media-area video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        @keyframes zoomEffect {
+            from { transform: scale(1); }
+            to { transform: scale(1.1); }
+        }
+
+        /* Área de Informação (Direita) */
+        .info-area {
+            flex: 1;
+            background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
+            padding: 3rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            position: relative;
+            box-shadow: -10px 0 30px rgba(0,0,0,0.3);
+            z-index: 10;
+        }
+
+        .event-badge {
+            background: #0d6efd;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 50px;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 0.9rem;
+            align-self: flex-start;
+            margin-bottom: 20px;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .event-title {
+            font-size: 3.5rem;
+            font-weight: 900;
+            line-height: 1.1;
+            margin-bottom: 1.5rem;
+            color: #1a1a1a;
+            /* Limitar linhas para não quebrar layout */
+            display: -webkit-box;
+            -webkit-line-clamp: 4;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .event-desc {
+            font-size: 1.4rem;
+            color: #555;
+            font-weight: 300;
+            margin-bottom: 2rem;
+            line-height: 1.4;
+        }
+
+        .event-time {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Barra de Progresso */
+        .progress-container {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 8px;
+            background: rgba(0,0,0,0.1);
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: #0d6efd;
+            transition: width 0.1s linear;
+        }
+
+        /* Modo Fallback (Quando não tem eventos) */
+        .no-events {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            color: white;
+            font-size: 2rem;
+        }
+        
+        /* Efeito Fade */
+        .fade-enter { opacity: 0; }
+        .fade-enter-active { opacity: 1; transition: opacity 500ms ease-in; }
+        .fade-exit { opacity: 1; }
+        .fade-exit-active { opacity: 0; transition: opacity 500ms ease-in; }
+
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // --- CONFIGURAÇÕES ---
+    // IMPORTANTE: Troque pela sua API Key criada no Passo 1
+    const API_KEY = 'AIzaSyDxa-bLe12wS36NGd52ClMlBJwY2PKJGKo'; 
+    const CALENDAR_ID = 'fdaea3f022f9694031dd276f79b66373be00b462976bf18384048996af96091f@group.calendar.google.com'; // Ou o ID da sua agenda
+    const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1600&q=80';
+    const SLIDE_DURATION = 10000; // 10 segundos por slide
+    // ---------------------
+
+    function App() {
+        const [events, setEvents] = useState([]);
+        const [currentIndex, setCurrentIndex] = useState(0);
+        const [progress, setProgress] = useState(0);
+        const [loading, setLoading] = useState(true);
+        
+        // Estado para controlar reset do timer quando for vídeo
+        const [customDuration, setCustomDuration] = useState(SLIDE_DURATION); 
+
+        // 1. Fetch Google Calendar
+        useEffect(() => {
+            const fetchEvents = async () => {
+                const now = new Date();
+                const start = now.toISOString();
+                
+                // Pegar eventos dos próximos 30 dias
+                const end = new Date();
+                end.setDate(end.getDate() + 30);
+                
+                const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(CALENDAR_ID)}/events?key=${API_KEY}&timeMin=${start}&timeMax=${end.toISOString()}&singleEvents=true&orderBy=startTime&showDeleted=false`;
+
+                try {
+                    const res = await fetch(url);
+                    const data = await res.json();
+                    if (data.items) {
+                        // Filtra eventos passados no dia de hoje para não mostrar coisa velha
+                        setEvents(data.items);
+                    }
+                } catch (error) {
+                    console.error("Erro API:", error);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            fetchEvents();
+            // Atualiza a agenda a cada 10 minutos
+            const interval = setInterval(fetchEvents, 600000); 
+            return () => clearInterval(interval);
+        }, []);
+
+        // 2. Timer do Slide
+        useEffect(() => {
+            if (events.length === 0) return;
+
+            const intervalTime = 100;
+            const steps = customDuration / intervalTime;
+            let currentStep = 0;
+
+            const timer = setInterval(() => {
+                currentStep++;
+                setProgress((currentStep / steps) * 100);
+
+                if (currentStep >= steps) {
+                    handleNextSlide();
+                }
+            }, intervalTime);
+
+            return () => clearInterval(timer);
+        }, [currentIndex, events, customDuration]);
+
+        const handleNextSlide = () => {
+            setProgress(0);
+            setCurrentIndex((prev) => (prev + 1) % events.length);
+            setCustomDuration(SLIDE_DURATION); // Reseta duração padrão
+        };
+
+        // 3. Extrator de Mídia (Imagem ou Vídeo)
+        const getMedia = (description) => {
+            if (!description) return { type: 'image', url: DEFAULT_IMAGE };
+
+            // Verifica se tem link de vídeo MP4
+            const videoMatch = description.match(/https?:\/\/[^\s"<>]+(\.mp4|\.webm)/);
+            if (videoMatch) return { type: 'video', url: videoMatch[0] };
+
+            // Verifica Youtube (Embedding simples - requer ajuste de política às vezes)
+            // Para TV Corporativa, arquivos diretos (.mp4) são melhores que Youtube embed
+            
+            // Verifica Imagem Drive ou Direta
+            const driveIdMatch = description.match(/\/d\/([a-zA-Z0-9_-]+)|id=([a-zA-Z0-9_-]+)/);
+            if (driveIdMatch) {
+                const id = driveIdMatch[1] || driveIdMatch[2];
+                return { type: 'image', url: `https://drive.google.com/thumbnail?id=${id}&sz=w1920` };
+            }
+
+            const imgMatch = description.match(/https?:\/\/[^\s"<>]+(\.jpg|\.jpeg|\.png|\.webp)/);
+            if (imgMatch) return { type: 'image', url: imgMatch[0] };
+
+            return { type: 'image', url: DEFAULT_IMAGE };
+        };
+
+        // 4. Tratamento de Texto
+        const cleanDescription = (text) => {
+            if (!text) return "";
+            // Remove links HTML e URLs cruas para não sujar a tela
+            return text.replace(/<[^>]*>?/gm, '').replace(/https?:\/\/[^\s]+/g, '').substring(0, 150) + (text.length > 150 ? '...' : '');
+        };
+
+        const formatDate = (dateStr) => {
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' });
+        };
+
+        if (loading) return <div className="no-events">Carregando Agenda...</div>;
+        if (events.length === 0) return <div className="no-events">Sem eventos programados.</div>;
+
+        const event = events[currentIndex];
+        const media = getMedia(event.description);
+        const startTime = event.start.dateTime ? new Date(event.start.dateTime).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'}) : 'Dia todo';
+        
+        return (
+            <div className="tv-container">
+                {/* Lado Esquerdo: Mídia */}
+                <div className="media-area">
+                    {media.type === 'video' ? (
+                        <video 
+                            src={media.url} 
+                            autoPlay 
+                            muted // Autoplay geralmente requer mudo em browsers modernos
+                            loop={false}
+                            onEnded={handleNextSlide} // Quando vídeo acabar, muda slide
+                            onLoadedMetadata={(e) => {
+                                // Se o vídeo for longo, estende o tempo do slide
+                                if(e.target.duration * 1000 > SLIDE_DURATION) {
+                                    setCustomDuration(e.target.duration * 1000);
+                                }
+                            }}
+                        />
+                    ) : (
+                        <img src={media.url} alt="Event" onError={(e) => e.target.src = DEFAULT_IMAGE} />
+                    )}
+                </div>
+
+                {/* Lado Direito: Informações */}
+                <div className="info-area">
+                    <div className="event-badge">
+                        <i className="material-icons">calendar_today</i>
+                        {formatDate(event.start.dateTime || event.start.date)}
+                    </div>
+                    
+                    <h1 className="event-title">{event.summary}</h1>
+                    
+                    <div className="event-desc">
+                        {cleanDescription(event.description)}
+                    </div>
+
+                    <div className="event-time">
+                        <i className="material-icons">schedule</i>
+                        {startTime}
+                    </div>
+
+                    <div className="progress-container">
+                        <div className="progress-bar-fill" style={{width: `${progress}%`}}></div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+</script>
+</body>
+</html>
