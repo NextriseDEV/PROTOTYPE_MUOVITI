@@ -95,7 +95,6 @@
             line-height: 1.1;
             margin-bottom: 1.5rem;
             color: #1a1a1a;
-            /* Limitar linhas para não quebrar layout */
             display: -webkit-box;
             -webkit-line-clamp: 4;
             -webkit-box-orient: vertical;
@@ -135,22 +134,25 @@
             transition: width 0.1s linear;
         }
 
-        /* Modo Fallback (Quando não tem eventos) */
-        .no-events {
+        /* Mensagens de Erro e Loading */
+        .status-message {
             display: flex;
             justify-content: center;
             align-items: center;
+            flex-direction: column;
             height: 100%;
             color: white;
-            font-size: 2rem;
+            font-size: 1.5rem;
+            text-align: center;
+            padding: 20px;
         }
-        
-        /* Efeito Fade */
-        .fade-enter { opacity: 0; }
-        .fade-enter-active { opacity: 1; transition: opacity 500ms ease-in; }
-        .fade-exit { opacity: 1; }
-        .fade-exit-active { opacity: 0; transition: opacity 500ms ease-in; }
-
+        .error-box {
+            background: rgba(220, 53, 69, 0.2);
+            border: 1px solid #dc3545;
+            padding: 20px;
+            border-radius: 10px;
+            max-width: 600px;
+        }
     </style>
 </head>
 <body>
@@ -160,11 +162,15 @@
     const { useState, useEffect, useRef } = React;
 
     // --- CONFIGURAÇÕES ---
-    // IMPORTANTE: Troque pela sua API Key criada no Passo 1
-    const API_KEY = 'AIzaSyDgNvI7f1dgeFLHLTWeHTAweSeTsJpl7ws'; 
-    const CALENDAR_ID = 'nextrisedesenvolvimento@gmail.com'; // Ou o ID da sua agenda
-    const DEFAULT_IMAGE = '9969791c02881fad4e0c7ef331b63bf960fd945b6714896e55c6dadb6c7f3e78@group.calendar.google.com';
-    const SLIDE_DURATION = 10000; // 10 segundos por slide
+    // API KEY fornecida
+    const API_KEY = 'AIzaSyDxa-bLe12wS36NGd52ClMlBJwY2PKJGKo'; 
+    
+    // ID DA AGENDA CORRIGIDO (O ID longo que você enviou)
+    // Se quiser voltar para o email, troque aqui, mas o email precisa ser o dono da agenda pública
+    const CALENDAR_ID = 'fdaea3f022f9694031dd276f79b66373be00b462976bf18384048996af96091f@group.calendar.google.com';
+    
+    const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1600&q=80';
+    const SLIDE_DURATION = 10000; // 10 segundos
     // ---------------------
 
     function App() {
@@ -172,13 +178,14 @@
         const [currentIndex, setCurrentIndex] = useState(0);
         const [progress, setProgress] = useState(0);
         const [loading, setLoading] = useState(true);
+        const [error, setError] = useState(null);
         
-        // Estado para controlar reset do timer quando for vídeo
         const [customDuration, setCustomDuration] = useState(SLIDE_DURATION); 
 
         // 1. Fetch Google Calendar
         useEffect(() => {
             const fetchEvents = async () => {
+                setLoading(true);
                 const now = new Date();
                 const start = now.toISOString();
                 
@@ -186,25 +193,36 @@
                 const end = new Date();
                 end.setDate(end.getDate() + 30);
                 
+                // URL construída com o ID correto
                 const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(CALENDAR_ID)}/events?key=${API_KEY}&timeMin=${start}&timeMax=${end.toISOString()}&singleEvents=true&orderBy=startTime&showDeleted=false`;
 
                 try {
                     const res = await fetch(url);
-                    const data = await res.json();
-                    if (data.items) {
-                        // Filtra eventos passados no dia de hoje para não mostrar coisa velha
-                        setEvents(data.items);
+                    
+                    if (res.status === 403) {
+                        throw new Error("Acesso Negado (403). Verifique se a Agenda é 'Pública' nas configurações do Google Calendar ou se a API Key tem permissão.");
                     }
-                } catch (error) {
-                    console.error("Erro API:", error);
+                    if (res.status === 404) {
+                        throw new Error("Agenda não encontrada (404). Verifique o ID da Agenda.");
+                    }
+
+                    const data = await res.json();
+                    
+                    if (data.items) {
+                        setEvents(data.items);
+                    } else {
+                        setEvents([]);
+                    }
+                } catch (err) {
+                    console.error("Erro API:", err);
+                    setError(err.message);
                 } finally {
                     setLoading(false);
                 }
             };
 
             fetchEvents();
-            // Atualiza a agenda a cada 10 minutos
-            const interval = setInterval(fetchEvents, 600000); 
+            const interval = setInterval(fetchEvents, 600000); // 10 min
             return () => clearInterval(interval);
         }, []);
 
@@ -231,21 +249,16 @@
         const handleNextSlide = () => {
             setProgress(0);
             setCurrentIndex((prev) => (prev + 1) % events.length);
-            setCustomDuration(SLIDE_DURATION); // Reseta duração padrão
+            setCustomDuration(SLIDE_DURATION); 
         };
 
-        // 3. Extrator de Mídia (Imagem ou Vídeo)
+        // 3. Extrator de Mídia
         const getMedia = (description) => {
             if (!description) return { type: 'image', url: DEFAULT_IMAGE };
 
-            // Verifica se tem link de vídeo MP4
             const videoMatch = description.match(/https?:\/\/[^\s"<>]+(\.mp4|\.webm)/);
             if (videoMatch) return { type: 'video', url: videoMatch[0] };
 
-            // Verifica Youtube (Embedding simples - requer ajuste de política às vezes)
-            // Para TV Corporativa, arquivos diretos (.mp4) são melhores que Youtube embed
-            
-            // Verifica Imagem Drive ou Direta
             const driveIdMatch = description.match(/\/d\/([a-zA-Z0-9_-]+)|id=([a-zA-Z0-9_-]+)/);
             if (driveIdMatch) {
                 const id = driveIdMatch[1] || driveIdMatch[2];
@@ -258,10 +271,8 @@
             return { type: 'image', url: DEFAULT_IMAGE };
         };
 
-        // 4. Tratamento de Texto
         const cleanDescription = (text) => {
             if (!text) return "";
-            // Remove links HTML e URLs cruas para não sujar a tela
             return text.replace(/<[^>]*>?/gm, '').replace(/https?:\/\/[^\s]+/g, '').substring(0, 150) + (text.length > 150 ? '...' : '');
         };
 
@@ -270,8 +281,22 @@
             return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' });
         };
 
-        if (loading) return <div className="no-events">Carregando Agenda...</div>;
-        if (events.length === 0) return <div className="no-events">Sem eventos programados.</div>;
+        // --- Renderização de Estados ---
+
+        if (loading) return <div className="status-message">Carregando Agenda...</div>;
+
+        if (error) {
+            return (
+                <div className="status-message">
+                    <div className="error-box">
+                        <h3>Ocorreu um Erro</h3>
+                        <p>{error}</p>
+                    </div>
+                </div>
+            );
+        }
+
+        if (events.length === 0) return <div className="status-message">Sem eventos públicos programados para os próximos 30 dias.</div>;
 
         const event = events[currentIndex];
         const media = getMedia(event.description);
@@ -279,28 +304,25 @@
         
         return (
             <div className="tv-container">
-                {/* Lado Esquerdo: Mídia */}
                 <div className="media-area">
                     {media.type === 'video' ? (
                         <video 
                             src={media.url} 
                             autoPlay 
-                            muted // Autoplay geralmente requer mudo em browsers modernos
+                            muted 
                             loop={false}
-                            onEnded={handleNextSlide} // Quando vídeo acabar, muda slide
+                            onEnded={handleNextSlide} 
                             onLoadedMetadata={(e) => {
-                                // Se o vídeo for longo, estende o tempo do slide
                                 if(e.target.duration * 1000 > SLIDE_DURATION) {
                                     setCustomDuration(e.target.duration * 1000);
                                 }
                             }}
                         />
                     ) : (
-                        <img src={media.url} alt="Event" onError={(e) => e.target.src = DEFAULT_IMAGE} />
+                        <img src={media.url} alt="Event" onError={(e) => { if(e.target.src !== DEFAULT_IMAGE) e.target.src = DEFAULT_IMAGE; }} />
                     )}
                 </div>
 
-                {/* Lado Direito: Informações */}
                 <div className="info-area">
                     <div className="event-badge">
                         <i className="material-icons">calendar_today</i>
